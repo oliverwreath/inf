@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.util.*;
 
-import static com.Inf.StringUtils.trimNonAlphaDigit;
+import static com.Inf.StringUtils.trimNonAlphaDigitAndToLower;
 
 /**
  * Author: Oliver
@@ -19,21 +19,28 @@ import static com.Inf.StringUtils.trimNonAlphaDigit;
  * <p>
  * <p>
  * When all we have is ONE-Small-machine,
- * we are using the sequential I/O so we need some algorithms good for sequential access (like 2-pointers algorithms for merging 2 sorted arrays in linear time/ one pass) and tune it up for production level k-way merging.
- * So for something HUGE, let's use Divide& Conquer methodology to figure this out!
+ * we are using the sequential I/O so we need some algorithms good for sequential access (like merging 2 sorted files by keep a pointer to each tempFile, then keep using the smallest value from all the pointers, to write to our final merge outputFile. in linear time/ one pass) and tune it up for production level k-way merging.
+ * And also for efficient accessing smallest value that suggests minimumHeap or, in Java, PriorityQueue.
  * <p>
- * Let's define the Chunk means 15G of input data (Assumption: Memory 16G) with n words.
- * Time complexity O(n) for deduplicating one chunk.
- * Time complexity O(n log n) for sorting one chunk.
- * So the bottleneck lies in the sorting.
  * <p>
- * 1st Pass. Very efficient - linear Time Complexity: O(n) - break down into small chunks that fits the memory - linear Space Complexity: O(n).
- * 2nd Pass. Sort each chunk individually.
- * 3rd Pass. Time Complexity: O(n) n is the total number of words; Combine them easily, like, k-way merge at the same time like the 2-pointer algorithms trick, we just need a pointer for every chunk and a get the smallest among them, append to the output, rinse and repeat. (hint Oliver: be careful about deduplicating. This can be a Gotcha moment!)
+ * Let's define the Chunk as a slice of data that fits the memory, SO:
+ * <p>
+ * Step #1.
+ * Break down into small chunks that fits the memory.
+ * Linear Time Complexity: O(n) - n the total number of words
+ * linear Space Complexity: O(n) - n the total number of words
+ * Step #2.
+ * Sort each chunk individually.
+ * Logarithmic Time Complexity: O(m log m) - m the number of words of a chunk
+ * linear Space Complexity: O(m) - m the number of words of a chunk
+ * Step #3.
+ * K-way merge at the same time, we just need a pointer for every chunk and a get the smallest among them, append to the output, rinse and repeat. (hint Oliver: be careful about final deduplicating. This can be a Gotcha moment!)
+ * Linear Time Complexity: O(n) - n the total number of words
+ * linear Space Complexity: O(n) - n the total number of words
+ * <p>
  * <p>
  * Bonus point/ Optimization for highest standard:
- * 1. Use a good quicksort implementation that can switch to selection sort when the task becomes small.
- * 2. We can ask follow up for TopK and see if he can use minimum heap or TopK algorithms to stand out.
+ * 1. We can ask follow up for TopK.
  * <p>
  * <p>
  * Digress: If we can use Big data infrastructures,
@@ -42,7 +49,7 @@ import static com.Inf.StringUtils.trimNonAlphaDigit;
 public class HugeFileUniqueSorter {
     private static final Logger logger = LoggerFactory.getLogger(HugeFileUniqueSorter.class);
 
-    private static final String COMMON_FOLDER = "C:\\Users\\yanli\\IdeaProjects\\inf\\src\\main\\java\\com\\Inf\\";
+    static final String COMMON_FOLDER = "C:\\Users\\yanli\\IdeaProjects\\inf\\src\\main\\java\\com\\Inf\\";
 
     private static final String INPUT_SMALL_FILE_PATH = COMMON_FOLDER + "inputSmall.txt";
     private static final String INPUT_HUGE_FILE_PATH = COMMON_FOLDER + "inputHuge.txt";
@@ -65,26 +72,26 @@ public class HugeFileUniqueSorter {
         Validate.isTrue(inputFile.exists() && inputFile.isFile(), "inputFile %s NOT exists!", inputFile);
         Validate.notBlank(OUTPUT_FOLDER_PATH);
         Validate.isTrue(SIZE_THAT_FITS_MEMORY > 0);
-        File file = new File(OUTPUT_FOLDER_PATH);
-        emptyOrCreateFolder(file);
+        Validate.isTrue(emptyOrCreateFolder(new File(OUTPUT_FOLDER_PATH)));
 
         // main logic
-        HashSet<String> hashSet = new HashSet<>();
+        final String hugeFileName = inputFile.getName().substring(0, inputFile.getName().lastIndexOf('.'));
         int fileNumber = 0;
         List<File> smallFiles = new LinkedList<>();
-        final String hugeFileName = inputFile.getName().substring(0, inputFile.getName().lastIndexOf('.'));
+        HashSet<String> hashSet = new HashSet<>();
         try (BufferedReader bf = new BufferedReader(new FileReader(inputFile))) {
             // for Every File
             String line;
             while ((line = bf.readLine()) != null) {
+                line = line.trim();
                 if (line.isEmpty()) {
                     continue;
                 }
 
                 for (String word : line.split(" ", -1)) {
                     // for Every Word
-                    String tmpWord = trimNonAlphaDigit(word);
-                    if (StringUtils.isNotBlank(tmpWord) || hashSet.contains(tmpWord)) {
+                    String tmpWord = trimNonAlphaDigitAndToLower(word);
+                    if (StringUtils.isBlank(tmpWord) || hashSet.contains(tmpWord)) {
                         continue;
                     }
 
@@ -129,6 +136,7 @@ public class HugeFileUniqueSorter {
                 bw.write(s);
                 bw.newLine();
             }
+
             bw.flush();
         } catch (IOException e) {
             logger.error("ERROR writing outputFile: {}; e: {}", OUTPUT_FILE_PATH, e);
@@ -147,6 +155,7 @@ public class HugeFileUniqueSorter {
         // Validate Preconditions
         Validate.notEmpty(hashSet);
         Validate.notBlank(OUTPUT_FILE_PATH);
+        logger.debug("OUTPUT_FILE_PATH = {}", OUTPUT_FILE_PATH);
 
         return writeWords2File(sortWords(hashSet), OUTPUT_FILE_PATH);
     }
@@ -172,10 +181,11 @@ public class HugeFileUniqueSorter {
      * @param smallFiles a list of k smallFiles (chunks)
      * @param outputFile the final output file (k-way merged file (with deduplication))
      */
-    public void kWayMerging(final List<File> smallFiles, final File outputFile) {
+    public void kWayMergingSortedArray(final List<File> smallFiles, final File outputFile) {
         // Validate Preconditions
         Validate.notEmpty(smallFiles);
-        Validate.notBlank(FINAL_OUTPUT_FILE_PATH);
+        Validate.notNull(outputFile);
+        emptyOrCreateFolder(outputFile.getParentFile());
 
         // main logic - k-way merging (by the way handling duplications)
         // first round populate the empty PriorityQueue
@@ -251,7 +261,7 @@ public class HugeFileUniqueSorter {
      * @param smallFiles
      * @param topK
      */
-    private static long printFiles(final List<File> smallFiles, final int topK) {
+    static long printFiles(final List<File> smallFiles, final int topK) {
         // Validate Preconditions
         Validate.notEmpty(smallFiles);
         Validate.isTrue(topK >= 0);
@@ -275,7 +285,7 @@ public class HugeFileUniqueSorter {
      * @param topK
      * @return
      */
-    private static long printFiles(final File file2Print, final int topK) {
+    static long printFiles(final File file2Print, final int topK) {
         // Validate Preconditions
         Validate.notNull(file2Print);
         Validate.isTrue(topK >= 0);
@@ -285,7 +295,7 @@ public class HugeFileUniqueSorter {
         try (BufferedReader bf = new BufferedReader(new FileReader(file2Print))) {
             String line;
             while ((line = bf.readLine()) != null) {
-                if (!StringUtils.isNotBlank(line)) {
+                if (StringUtils.isNotBlank(line)) {
                     if (counter < topK) {
                         logger.info("{}", line);
                     }
@@ -299,21 +309,20 @@ public class HugeFileUniqueSorter {
         return counter;
     }
 
-    private static BufferedReader getBufferedReaderForFile(final String filePath) throws FileNotFoundException {
-        // Validate Preconditions
-        Validate.notBlank(filePath);
-
-        return new BufferedReader(new FileReader(filePath));
-    }
-
     private static boolean emptyOrCreateFolder(final File folder) {
         // Validate Preconditions
         Validate.notNull(folder);
 
-        try {
-            FileUtils.deleteDirectory(folder);
-        } catch (IOException e) {
-            logger.error("ERROR deleting directory: {} {}", folder, e);
+        if (folder.exists()) {
+            if (folder.isFile()) {
+                return folder.delete();
+            } else if (folder.isDirectory()) {
+                try {
+                    FileUtils.cleanDirectory(folder);
+                } catch (IOException e) {
+                    logger.error("ERROR deleting directory: {} {}", folder, e);
+                }
+            }
         }
         return createFolderIfNotExists(folder);
     }
@@ -322,7 +331,11 @@ public class HugeFileUniqueSorter {
         // Validate Preconditions
         Validate.notNull(folder);
 
-        return folder.mkdirs();
+        if (folder.exists() && folder.isDirectory()) {
+            return true;
+        } else {
+            return folder.mkdirs();
+        }
     }
 
     private class Entry {
@@ -351,17 +364,18 @@ public class HugeFileUniqueSorter {
         printFiles(smallFiles, 5);
     }
 
-    private static void step123Test() {
-        Validate.notBlank(INPUT_HUGE_FILE_PATH);
-        File inputFile = new File(INPUT_HUGE_FILE_PATH);
+    static void step123Test() {
+        Validate.notBlank(INPUT_SMALL_FILE_PATH);
+        File inputFile = new File(INPUT_SMALL_FILE_PATH);
         Validate.isTrue(inputFile.exists() && inputFile.isFile());
+        printFiles(inputFile, 5);
         List<File> smallFiles = hugeFile2SmallFiles(inputFile, TEMP_FOLDER_PATH, SIZE_THAT_FITS_MEMORY);
         printFiles(smallFiles, 5);
 
         Validate.notBlank(FINAL_OUTPUT_FILE_PATH);
         File outputFile = new File(FINAL_OUTPUT_FILE_PATH);
         Validate.notNull(outputFile);
-        new HugeFileUniqueSorter().kWayMerging(smallFiles, outputFile);
+        new HugeFileUniqueSorter().kWayMergingSortedArray(smallFiles, outputFile);
         printFiles(outputFile, 5);
     }
 
