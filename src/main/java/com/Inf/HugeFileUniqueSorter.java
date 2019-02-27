@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.util.*;
 
+import static com.Inf.StringUtils.trimNonAlphaDigit;
+
 /**
  * Author: Oliver
  * <p>
@@ -42,9 +44,10 @@ public class HugeFileUniqueSorter {
 
     private static final String COMMON_FOLDER = "C:\\Users\\yanli\\IdeaProjects\\inf\\src\\main\\java\\com\\Inf\\";
 
+    private static final String INPUT_SMALL_FILE_PATH = COMMON_FOLDER + "inputSmall.txt";
     private static final String INPUT_HUGE_FILE_PATH = COMMON_FOLDER + "inputHuge.txt";
-    private static final String OUTPUT_FOLDER_PATH = COMMON_FOLDER + "output";
-    private static final String FINAL_OUTPUT_PATH = COMMON_FOLDER + "output\\FINAL_Sorted_Words.txt";
+    private static final String TEMP_FOLDER_PATH = COMMON_FOLDER + "temp\\";
+    private static final String FINAL_OUTPUT_FILE_PATH = COMMON_FOLDER + "output\\FINAL_Sorted_Words.txt";
     private static final long SIZE_THAT_FITS_MEMORY = 10000L;
     private static final String FILE_SUFFIX = ".txt";
 
@@ -59,21 +62,17 @@ public class HugeFileUniqueSorter {
     public static List<File> hugeFile2SmallFiles(final File inputFile, final String OUTPUT_FOLDER_PATH, final long SIZE_THAT_FITS_MEMORY) {
         // Validate Preconditions
         Validate.notNull(inputFile);
+        Validate.isTrue(inputFile.exists() && inputFile.isFile(), "inputFile %s NOT exists!", inputFile);
         Validate.notBlank(OUTPUT_FOLDER_PATH);
         Validate.isTrue(SIZE_THAT_FITS_MEMORY > 0);
-
-        try {
-            FileUtils.deleteDirectory(new File(OUTPUT_FOLDER_PATH));
-        } catch (IOException e) {
-            logger.error("ERROR deleting directory: {} {}", OUTPUT_FOLDER_PATH, e);
-        }
-        createFolderIfNotExists(OUTPUT_FOLDER_PATH);
+        File file = new File(OUTPUT_FOLDER_PATH);
+        emptyOrCreateFolder(file);
 
         // main logic
         HashSet<String> hashSet = new HashSet<>();
         int fileNumber = 0;
         List<File> smallFiles = new LinkedList<>();
-        final String hugeFileName = inputFile.getName();
+        final String hugeFileName = inputFile.getName().substring(0, inputFile.getName().lastIndexOf('.'));
         try (BufferedReader bf = new BufferedReader(new FileReader(inputFile))) {
             // for Every File
             String line;
@@ -176,7 +175,7 @@ public class HugeFileUniqueSorter {
     public void kWayMerging(final List<File> smallFiles, final File outputFile) {
         // Validate Preconditions
         Validate.notEmpty(smallFiles);
-        Validate.notBlank(FINAL_OUTPUT_PATH);
+        Validate.notBlank(FINAL_OUTPUT_FILE_PATH);
 
         // main logic - k-way merging (by the way handling duplications)
         // first round populate the empty PriorityQueue
@@ -307,18 +306,23 @@ public class HugeFileUniqueSorter {
         return new BufferedReader(new FileReader(filePath));
     }
 
-    static String trimNonAlphaDigit(final String inputString) {
+    private static boolean emptyOrCreateFolder(final File folder) {
         // Validate Preconditions
-        Validate.notBlank(inputString);
+        Validate.notNull(folder);
 
-        return inputString.replaceAll("[^\\p{IsAlphabetic}^\\p{IsDigit}]", "");
+        try {
+            FileUtils.deleteDirectory(folder);
+        } catch (IOException e) {
+            logger.error("ERROR deleting directory: {} {}", folder, e);
+        }
+        return createFolderIfNotExists(folder);
     }
 
-    private static boolean createFolderIfNotExists(final String OUTPUT_FOLDER_PATH) {
+    private static boolean createFolderIfNotExists(final File folder) {
         // Validate Preconditions
-        Validate.notBlank(OUTPUT_FOLDER_PATH);
+        Validate.notNull(folder);
 
-        return new File(OUTPUT_FOLDER_PATH).mkdirs();
+        return folder.mkdirs();
     }
 
     private class Entry {
@@ -342,18 +346,20 @@ public class HugeFileUniqueSorter {
     private static void step1Test() {
         Validate.notBlank(INPUT_HUGE_FILE_PATH);
         File inputFile = new File(INPUT_HUGE_FILE_PATH);
-        List<File> smallFiles = hugeFile2SmallFiles(inputFile, OUTPUT_FOLDER_PATH, SIZE_THAT_FITS_MEMORY);
+        Validate.isTrue(inputFile.exists() && inputFile.isFile());
+        List<File> smallFiles = hugeFile2SmallFiles(inputFile, TEMP_FOLDER_PATH, SIZE_THAT_FITS_MEMORY);
         printFiles(smallFiles, 5);
     }
 
     private static void step123Test() {
         Validate.notBlank(INPUT_HUGE_FILE_PATH);
         File inputFile = new File(INPUT_HUGE_FILE_PATH);
-        List<File> smallFiles = hugeFile2SmallFiles(inputFile, OUTPUT_FOLDER_PATH, SIZE_THAT_FITS_MEMORY);
+        Validate.isTrue(inputFile.exists() && inputFile.isFile());
+        List<File> smallFiles = hugeFile2SmallFiles(inputFile, TEMP_FOLDER_PATH, SIZE_THAT_FITS_MEMORY);
         printFiles(smallFiles, 5);
 
-        Validate.notBlank(FINAL_OUTPUT_PATH);
-        File outputFile = new File(FINAL_OUTPUT_PATH);
+        Validate.notBlank(FINAL_OUTPUT_FILE_PATH);
+        File outputFile = new File(FINAL_OUTPUT_FILE_PATH);
         Validate.notNull(outputFile);
         new HugeFileUniqueSorter().kWayMerging(smallFiles, outputFile);
         printFiles(outputFile, 5);

@@ -40,6 +40,6 @@ public class InputQualityUtilsTest {
 
     @AfterAll
     static void cleanUp() {
-        logger.info("Test End!");
+        logger.info("Test End!\n");
     }
 }
