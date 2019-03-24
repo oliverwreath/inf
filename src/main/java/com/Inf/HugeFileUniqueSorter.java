@@ -224,6 +224,14 @@ public class HugeFileUniqueSorter {
             logger.error("can't creat or write to finalOutputFile with outputFile: {}; error: {}", outputFile, e);
         }
 
+        // close IOs
+        if (!scannerMap.isEmpty()) {
+            for (Scanner scanner : scannerMap.values()) {
+                if (scanner != null) {
+                    scanner.close();
+                }
+            }
+        }
         return;
     }
 

@@ -95,10 +95,11 @@ class HugeFileUniqueSorterTest {
         Validate.isTrue(inputFile.exists() && inputFile.isFile());
 
         List<String> lst = new LinkedList<>();
-        Scanner scanner1 = new Scanner(inputFile);
-        while (scanner1.hasNext()) {
-            for (String s : scanner1.nextLine().split(" ", -1)) {
-                lst.add(s.trim().toLowerCase());
+        try (Scanner scanner1 = new Scanner(inputFile)) {
+            while (scanner1.hasNext()) {
+                for (String s : scanner1.nextLine().split(" ", -1)) {
+                    lst.add(s.trim().toLowerCase());
+                }
             }
         }
         return lst;
